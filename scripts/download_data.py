@@ -1,13 +1,13 @@
-"""Fetch the runtime weights so the app can start without training.
+"""Fetch the prepared artifacts so the app can start without training.
 
-Default source: the GitHub release of this repository (~200 MB zip: small CNN,
-VGG16 fp32 + INT8, tf-idf, word2vec, E5 INT8 indexes). The multilingual E5
-encoder itself is pulled from the Hugging Face cache on first use.
+Default: the runtime weights from the GitHub release (~200 MB: small CNN,
+VGG16 fp32 + INT8, tf-idf, word2vec, E5 INT8 indexes). `--with-images` adds the
+10-class image subset (~720 MB) instead of running prepare_data.py for an hour.
+The multilingual E5 encoder itself is pulled from Hugging Face on first use.
 
-    python scripts/download_data.py                 # GitHub release
-    python scripts/download_data.py --hf-repo X/Y   # Hugging Face repo instead
-
-Images and recipes are not in the release; build them with prepare_data.py.
+    python scripts/download_data.py                    # weights only
+    python scripts/download_data.py --with-images      # weights + images
+    python scripts/download_data.py --hf-repo X/Y      # Hugging Face repo instead
 """
 from __future__ import annotations
 
@@ -19,10 +19,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import IMAGES, MODELS, ROOT
+from src.config import DATA, IMAGES, MODELS, RAW, ROOT
 
-RELEASE_URL = ("https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/"
-               "releases/latest/download/swe015-models.zip")
+BASE = "https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/latest/download"
+RELEASE_URL = f"{BASE}/swe015-models.zip"
+IMAGES_URL = f"{BASE}/swe015-food10.zip"
 
 
 def fetch(url: str, dest: Path) -> None:
@@ -46,9 +47,22 @@ def prefetch_encoder() -> None:
     print("ok")
 
 
+def fetch_images(url: str) -> None:
+    tmp = DATA / "cache" / "swe015-food10.zip"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    fetch(url, tmp)
+    print("extracting images…")
+    RAW.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(tmp) as zf:
+        zf.extractall(RAW)  # archive root is food10/
+    tmp.unlink()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=RELEASE_URL)
+    ap.add_argument("--with-images", action="store_true",
+                    help="also download the 10-class image subset (~720 MB)")
     ap.add_argument("--hf-repo", default=None,
                     help="download a Hugging Face model repo instead of the release")
     ap.add_argument("--skip-encoder", action="store_true")
@@ -63,13 +77,16 @@ def main() -> None:
         snapshot_download(repo_id=args.hf_repo, repo_type="model", local_dir=str(MODELS),
                           allow_patterns=["*.pt", "*.onnx", "*.json", "*.npy", "*.kv", "*.pkl"])
     else:
-        tmp = ROOT / "data" / "cache" / "swe015-models.zip"
+        tmp = DATA / "cache" / "swe015-models.zip"
         tmp.parent.mkdir(parents=True, exist_ok=True)
         fetch(args.url, tmp)
-        print("extracting…")
+        print("extracting weights…")
         with zipfile.ZipFile(tmp) as zf:
-            zf.extractall(ROOT)
+            zf.extractall(ROOT)  # archive root is models/
         tmp.unlink()
+
+    if args.with_images and not IMAGES.exists():
+        fetch_images(IMAGES_URL)
 
     if not args.skip_encoder:
         prefetch_encoder()
@@ -78,8 +95,11 @@ def main() -> None:
                 MODELS / "retrieval" / "bert_e5_int8" / "encoder_int8.onnx"]
     for p in required:
         print(f"  {'ok ' if p.exists() else 'MISSING'} {p.relative_to(ROOT)}")
-    if not IMAGES.exists():
-        print("\nimages are missing: python scripts/prepare_data.py --skip-recipes")
+    n = sum(1 for _ in IMAGES.rglob("*.jpg")) if IMAGES.exists() else 0
+    print(f"  {'ok ' if n else 'MISSING'} images ({n} JPEG)")
+    if not n:
+        print("\nimages are missing: python scripts/download_data.py --with-images  "
+              "(or prepare_data.py)")
     print("\nnext: python app.py")
 
 

@@ -16,28 +16,30 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (Linux/macOS: source .venv/bin/activate)
 pip install -r requirements.txt
 
-# 1) data: Food-101 10-class subset + recipe corpus (~1 h, 740 MB)
-python scripts/prepare_data.py
+# 1) data + weights from the release (~920 MB total, about 5 minutes)
+python scripts/download_data.py --with-images
 
-# 2) models: download the published weights (~200 MB, no training needed)
-python scripts/download_data.py
-
-#    ... or rebuild them from scratch (~40 min on an RTX 4060 Laptop)
-python scripts/build_indexes.py
-python scripts/train_cnn.py
-python scripts/train_vgg.py
-python scripts/quantize.py
-
-# 3) run the app
+# 2) run the app
 python app.py                     # http://127.0.0.1:7860
 ```
 
-The weights live in a GitHub release
+The weights are 200 MB (small CNN, VGG16 fp32 + INT8, tf-idf, word2vec, E5 INT8) and
+the images are the 10-class subset; both live in the GitHub release
 (<https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/tag/v1.0-weights>),
-which keeps the repository free of large binary files, and `download_data.py` also
-caches the multilingual encoder so the first run works offline. `scripts/upload_models.py`
-can publish the same files to the Hugging Face Hub instead, and
-`scripts/download_data.py --hf-repo <user>/<repo>` reads from there.
+which keeps the repository free of large binary files. `download_data.py` also caches
+the multilingual encoder so the first run works offline.
+
+To rebuild everything from the original sources instead (about 1 h + 40 min of
+training on an RTX 4060 Laptop):
+
+```bash
+python scripts/prepare_data.py      # Food-101 subset + recipe corpus
+python scripts/dedupe_images.py     # remove the 7 exact duplicate photos
+python scripts/build_indexes.py     # tf-idf, word2vec, E5 fp32, E5 INT8
+python scripts/train_cnn.py         # small CNN from scratch
+python scripts/train_vgg.py         # VGG16 feature extraction + conv5 fine-tuning
+python scripts/quantize.py          # VGG16 -> ONNX -> INT8 QDQ
+```
 
 ## What is in the box
 
