@@ -34,19 +34,10 @@ python app.py                     # http://127.0.0.1:7860
 
 The weights live in a GitHub release
 (<https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/tag/v1.0-weights>),
-which keeps the repository free of large binary files; `scripts/upload_models.py`
+which keeps the repository free of large binary files, and `download_data.py` also
+caches the multilingual encoder so the first run works offline. `scripts/upload_models.py`
 can publish the same files to the Hugging Face Hub instead, and
 `scripts/download_data.py --hf-repo <user>/<repo>` reads from there.
-
-The trained weights are not in git (see `.gitignore`): the 200 MB of runtime files
-live in the release linked above and are fetched by `scripts/download_data.py`,
-which also caches the multilingual encoder so the first run works offline.
-
-To publish the weights of a finished run:
-
-```bash
-python scripts/upload_models.py --repo <user>/swe015-food-recipe-finder   # Hugging Face
-```
 
 ## What is in the box
 
