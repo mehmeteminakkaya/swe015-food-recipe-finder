@@ -28,7 +28,10 @@ def main() -> None:
 
     if not args.repo:
         print("No --repo/HF_REPO given; preparing the data locally instead.")
-        os.execv(sys.executable, [sys.executable, "scripts/prepare_data.py"])
+        import subprocess
+
+        subprocess.run([sys.executable, "scripts/prepare_data.py"], check=False)
+        return
 
     from huggingface_hub import snapshot_download
 

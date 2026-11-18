@@ -16,7 +16,20 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (Linux/macOS: source .venv/bin/activate)
 pip install -r requirements.txt
 
-python scripts/prepare_data.py   # Food-101 10-class subset + recipe corpus (~1 h, 740 MB)
+# 1) data: Food-101 10-class subset + recipe corpus (~1 h, 740 MB)
+python scripts/prepare_data.py
+
+# 2) models: either train them (~40 min on an RTX 4060 Laptop) ...
+python scripts/build_indexes.py
+python scripts/train_cnn.py
+python scripts/train_vgg.py
+python scripts/quantize.py
+
+#    ... or download the published weights instead of step 2
+set HF_REPO=<user>/swe015-food-recipe-finder
+python scripts/download_data.py
+
+# 3) run the app
 python app.py                     # http://127.0.0.1:7860
 ```
 
@@ -122,7 +135,7 @@ src/retrieval/tfidf.py     tf-idf + cosine baseline
 src/retrieval/w2v.py       word2vec trained on our corpus
 src/retrieval/bert.py      multilingual E5 encoder
 src/retrieval/quantize.py  E5 -> ONNX -> INT8 (dynamic)
-src/vision/…               small CNN, VGG16, Grad-CAM, data loaders, evaluation
+src/vision/…               small CNN, VGG16, data loaders, model loaders, evaluation
 scripts/…                  data prep, training, quantization, evaluation, benchmark
 data/queries.jsonl         the 40 test queries
 results/                   metrics.json, results.csv, training histories
