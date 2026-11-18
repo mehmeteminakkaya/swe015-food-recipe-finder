@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "backend": "native",
+  "rasterEngine": "pdfium",
+  "source": "saved",
+  "inputPath": "C:\\Users\\aktah\\OneDrive\\Desktop\\Swe-Homework\\docs\\slides.pdf",
+  "sourceSha256": "7c17f8e340476f56c2f7df0e4a86c958a9b35ee1d410ee3872435b914cfb4e8a",
+  "dpi": 144,
+  "pageCount": 12,
+  "images": [
+    {
+      "index": 1,
+      "page": 1,
+      "path": "C:\\Users\\aktah\\OneDrive\\Desktop\\Swe-Homework\\.dsh-office-092b604765ef4499985204baa184fa54\\render\\page-0001.png",
+      "width": 1920,
+      "height": 1080,
+      "rectangle": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720
+      },
+      "byteLength": 108610
+    }
+  ],
+  "missingFonts": []
+}

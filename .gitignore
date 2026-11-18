@@ -12,4 +12,5 @@ models/
 .remember/
 *.docx
 logs/
+dist/
 

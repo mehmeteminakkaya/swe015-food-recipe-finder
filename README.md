@@ -19,33 +19,33 @@ pip install -r requirements.txt
 # 1) data: Food-101 10-class subset + recipe corpus (~1 h, 740 MB)
 python scripts/prepare_data.py
 
-# 2) models: either train them (~40 min on an RTX 4060 Laptop) ...
+# 2) models: download the published weights (~200 MB, no training needed)
+python scripts/download_data.py
+
+#    ... or rebuild them from scratch (~40 min on an RTX 4060 Laptop)
 python scripts/build_indexes.py
 python scripts/train_cnn.py
 python scripts/train_vgg.py
 python scripts/quantize.py
 
-#    ... or download the published weights instead of step 2
-set HF_REPO=<user>/swe015-food-recipe-finder
-python scripts/download_data.py
-
 # 3) run the app
 python app.py                     # http://127.0.0.1:7860
 ```
 
-The trained weights are not in git (see `.gitignore`). Either run the training
-scripts below (about 40 minutes on an RTX 4060 Laptop), or fetch a published copy:
+The weights live in a GitHub release
+(<https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/tag/v1.0-weights>),
+which keeps the repository free of large binary files; `scripts/upload_models.py`
+can publish the same files to the Hugging Face Hub instead, and
+`scripts/download_data.py --hf-repo <user>/<repo>` reads from there.
+
+The trained weights are not in git (see `.gitignore`): the 200 MB of runtime files
+live in the release linked above and are fetched by `scripts/download_data.py`,
+which also caches the multilingual encoder so the first run works offline.
+
+To publish the weights of a finished run:
 
 ```bash
-set HF_REPO=<user>/swe015-food-recipe-finder
-python scripts/download_data.py
-```
-
-To publish the weights of a finished run to the Hub:
-
-```bash
-huggingface-cli login
-python scripts/upload_models.py --repo <user>/swe015-food-recipe-finder
+python scripts/upload_models.py --repo <user>/swe015-food-recipe-finder   # Hugging Face
 ```
 
 ## What is in the box
@@ -139,7 +139,7 @@ src/vision/…               small CNN, VGG16, data loaders, model loaders, eval
 scripts/…                  data prep, training, quantization, evaluation, benchmark
 data/queries.jsonl         the 40 test queries
 results/                   metrics.json, results.csv, training histories
-docs/                      PLAN.md, architecture.png, gradcam_example.png, slides
+docs/                      PLAN.md, architecture.png, gradcam_example.png, slides, VIDEO_SCRIPT.md
 ```
 
 ## Notes and limitations
