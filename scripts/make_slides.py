@@ -147,9 +147,14 @@ def slide_title(prs, name, student_id, repo, video):
     textbox(s, 0.9, 4.15, 5.6, 1.9,
             f"{name}\nStudent ID: {student_id}\n22 November 2026",
             size=15, color=WHITE, space_after=8)
-    textbox(s, 6.9, 4.15, 5.5, 1.9,
-            f"Code: {repo}\nVideo: {video}\nDemo: python app.py → 127.0.0.1:7860",
-            size=12, color=RGBColor(0xC9, 0xD6, 0xE3), space_after=8)
+    links = textbox(s, 6.9, 4.15, 5.5, 1.9,
+                    f"Code: {repo}\nVideo: {video}\nDemo: python app.py → 127.0.0.1:7860",
+                    size=12, color=RGBColor(0xC9, 0xD6, 0xE3), space_after=8)
+    # Make the repository and the video real hyperlinks, not just printed URLs.
+    for paragraph, target in zip(links.text_frame.paragraphs, (repo, video)):
+        if str(target).startswith("http"):
+            for run in paragraph.runs:
+                run.hyperlink.address = str(target)
 
 
 def slide_problem(prs):
