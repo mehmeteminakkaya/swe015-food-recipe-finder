@@ -1,0 +1,24 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The text pipeline and the query-set checks need no torch, no weights
+      # and no GPU: keeping CI to these few packages makes it finish in seconds.
+      - name: Install the dependencies the tests need
+        run: pip install snowballstemmer==2.2.0
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v

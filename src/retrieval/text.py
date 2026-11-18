@@ -75,8 +75,14 @@ def detect_lang(text: str) -> str:
 
 
 def normalize(text: str) -> str:
-    # Turkish dotted/dotless I must be handled before lower().
-    text = text.replace("I", "ı").replace("İ", "i") if _TR_CHARS.search(text.lower()) else text
+    # "İ" only exists in Turkish, so it is always safe to fold it to "i"
+    # (str.lower() would otherwise leave a combining dot that the punctuation
+    # strip turns into a space: "İstanbul" -> "i stanbul").
+    text = text.replace("İ", "i")
+    # "I" is ambiguous (English pronoun vs Turkish dotless I): fold it only
+    # once the text already carries a Turkish-specific letter.
+    if _TR_CHARS.search(text.lower()):
+        text = text.replace("I", "ı")
     text = text.lower()
     text = re.sub(r"[^\w\s-]", " ", text)
     return re.sub(r"\s+", " ", text).strip()

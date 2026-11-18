@@ -1,5 +1,7 @@
 # Food Photo → Recipe Finder (SWE015 — Use Case 3)
 
+[![tests](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml/badge.svg)](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml)
+
 Photograph a dish, get the predicted dish with a Grad-CAM heat map, then type what
 you want in Turkish or English ("vejetaryen, 30 dakikadan kısa" / "vegetarian,
 under 30 minutes") and get the five best-matching recipes with similarity scores.
@@ -134,6 +136,21 @@ data/queries.jsonl         the 40 test queries
 results/                   metrics.json, results.csv, training histories
 docs/                      PLAN.md, architecture.png, gradcam_example.png, slides, VIDEO_SCRIPT.md
 ```
+
+## Tests
+
+The text pipeline and the query set are covered by plain `unittest` tests that need
+no torch, no weights and no GPU (the GitHub Actions workflow runs them on every push):
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+They lock down the constraint parser (TR/EN time and diet phrasings, the
+"quick → 30 minutes" rule, the "vegan implies vegetarian" rule), the Turkish
+dotted/dotless I normalisation, and the fact that every query in `data/queries.jsonl`
+still parses to the constraints stored next to it and has at least three relevant
+recipes. A wording change that would silently alter the benchmark fails the build.
 
 ## Notes and limitations
 

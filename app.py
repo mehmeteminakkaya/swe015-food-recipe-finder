@@ -126,13 +126,16 @@ def predict_photo(img: Image.Image, photo_model: str):
 
     prob = torch.softmax(logits, dim=1)[0]
     top = int(prob.argmax())
+    confidence = float(prob[top])
     text = "\n".join(
         f"{cls[i].replace('_', ' ')}: {float(prob[i]):.1%}"
         for i in prob.topk(5).indices.tolist()
     )
     ms = (time.perf_counter() - t0) * 1000
     cam_img = gradcam(img.convert("RGB"), top)
-    return cam_img, cls[top].replace("_", " "), text, f"{photo_model} · {ms:.0f} ms · güven {float(prob[top]):.1%}"
+    warn = "" if confidence >= 0.30 else " · ⚠️ düşük güven: net bir yemek görünmüyor olabilir"
+    return (cam_img, cls[top].replace("_", " "), text,
+            f"{photo_model} · {ms:.0f} ms · güven {confidence:.1%}{warn}")
 
 
 def _pool(dish_key: str, max_minutes: int | None, diet: list[str]) -> list:
