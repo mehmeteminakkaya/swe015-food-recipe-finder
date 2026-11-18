@@ -1,0 +1,40 @@
+{"id": "q01", "lang": "tr", "text": "vejetaryen pizza, 30 dakikadan kısa", "target_dish": "pizza", "max_minutes": 30, "diet": ["vegetarian"]}
+{"id": "q02", "lang": "tr", "text": "hızlı spagetti bolonez", "target_dish": "spaghetti_bolognese", "max_minutes": 30, "diet": []}
+{"id": "q03", "lang": "tr", "text": "nohut köftesi, en fazla 30 dakika", "target_dish": "falafel", "max_minutes": 30, "diet": []}
+{"id": "q04", "lang": "tr", "text": "limonlu avokado dip, 15 dakikadan kısa", "target_dish": "guacamole", "max_minutes": 15, "diet": []}
+{"id": "q05", "lang": "tr", "text": "çikolatalı kek, 1 saatten kısa", "target_dish": "chocolate_cake", "max_minutes": 60, "diet": []}
+{"id": "q06", "lang": "tr", "text": "sezar salata, 20 dakikadan az", "target_dish": "caesar_salad", "max_minutes": 20, "diet": []}
+{"id": "q07", "lang": "tr", "text": "kahvaltılık pankek, 30 dakika içinde", "target_dish": "pancakes", "max_minutes": 30, "diet": []}
+{"id": "q08", "lang": "tr", "text": "suşi, 30 dakikadan kısa", "target_dish": "sushi", "max_minutes": 30, "diet": []}
+{"id": "q09", "lang": "tr", "text": "baharatlı ramen çorbası, 15 dakikadan kısa", "target_dish": "ramen", "max_minutes": 15, "diet": []}
+{"id": "q10", "lang": "tr", "text": "vejetaryen hamburger, en fazla 30 dakika", "target_dish": "hamburger", "max_minutes": 30, "diet": ["vegetarian"]}
+{"id": "q11", "lang": "tr", "text": "etsiz suşi tarifi", "target_dish": "sushi", "max_minutes": null, "diet": ["vegetarian"]}
+{"id": "q12", "lang": "tr", "text": "pratik tatlı, 30 dakika", "target_dish": "chocolate_cake", "max_minutes": 30, "diet": []}
+{"id": "q13", "lang": "tr", "text": "fırında falafel", "target_dish": "falafel", "max_minutes": null, "diet": []}
+{"id": "q14", "lang": "tr", "text": "kıymalı spagetti", "target_dish": "spaghetti_bolognese", "max_minutes": null, "diet": []}
+{"id": "q15", "lang": "tr", "text": "mantarlı pizza", "target_dish": "pizza", "max_minutes": null, "diet": []}
+{"id": "q16", "lang": "tr", "text": "vegan ramen, 30 dakikadan kısa", "target_dish": "ramen", "max_minutes": 30, "diet": ["vegan"]}
+{"id": "q17", "lang": "tr", "text": "vejetaryen sezar salata, 20 dakikadan az", "target_dish": "caesar_salad", "max_minutes": 20, "diet": ["vegetarian"]}
+{"id": "q18", "lang": "tr", "text": "çikolatalı vejetaryen kek", "target_dish": "chocolate_cake", "max_minutes": null, "diet": ["vegetarian"]}
+{"id": "q19", "lang": "tr", "text": "vegan guakamole, 15 dakika içinde", "target_dish": "guacamole", "max_minutes": 15, "diet": ["vegan"]}
+{"id": "q20", "lang": "tr", "text": "hızlı pankek tarifi", "target_dish": "pancakes", "max_minutes": 30, "diet": []}
+{"id": "q21", "lang": "en", "text": "vegetarian pizza under 30 minutes", "target_dish": "pizza", "max_minutes": 30, "diet": ["vegetarian"]}
+{"id": "q22", "lang": "en", "text": "spaghetti with rich meat sauce", "target_dish": "spaghetti_bolognese", "max_minutes": null, "diet": []}
+{"id": "q23", "lang": "en", "text": "crispy chickpea fritters, under 30 minutes", "target_dish": "falafel", "max_minutes": 30, "diet": []}
+{"id": "q24", "lang": "en", "text": "fresh avocado dip, ready in 15 minutes", "target_dish": "guacamole", "max_minutes": 15, "diet": []}
+{"id": "q25", "lang": "en", "text": "chocolate cake, no more than 2 hours", "target_dish": "chocolate_cake", "max_minutes": 120, "diet": []}
+{"id": "q26", "lang": "en", "text": "classic caesar salad, under 20 minutes", "target_dish": "caesar_salad", "max_minutes": 20, "diet": []}
+{"id": "q27", "lang": "en", "text": "fluffy pancakes for breakfast, under 30 minutes", "target_dish": "pancakes", "max_minutes": 30, "diet": []}
+{"id": "q28", "lang": "en", "text": "sushi rolls, ready in 30 minutes", "target_dish": "sushi", "max_minutes": 30, "diet": []}
+{"id": "q29", "lang": "en", "text": "spicy ramen bowl, 20 minutes or less", "target_dish": "ramen", "max_minutes": 20, "diet": []}
+{"id": "q30", "lang": "en", "text": "meatless burgers for a weeknight dinner", "target_dish": "hamburger", "max_minutes": null, "diet": ["vegetarian"]}
+{"id": "q31", "lang": "en", "text": "vegetarian sushi rolls, under 30 minutes", "target_dish": "sushi", "max_minutes": 30, "diet": ["vegetarian"]}
+{"id": "q32", "lang": "en", "text": "quick chocolate dessert, under 30 minutes", "target_dish": "chocolate_cake", "max_minutes": 30, "diet": []}
+{"id": "q33", "lang": "en", "text": "baked falafel with hummus", "target_dish": "falafel", "max_minutes": null, "diet": []}
+{"id": "q34", "lang": "en", "text": "thin crust pizza with mushrooms", "target_dish": "pizza", "max_minutes": null, "diet": []}
+{"id": "q35", "lang": "en", "text": "bolognese pasta, max 60 minutes", "target_dish": "spaghetti_bolognese", "max_minutes": 60, "diet": []}
+{"id": "q36", "lang": "en", "text": "vegan ramen, under 30 minutes", "target_dish": "ramen", "max_minutes": 30, "diet": ["vegan"]}
+{"id": "q37", "lang": "en", "text": "vegetarian caesar salad, under 20 minutes", "target_dish": "caesar_salad", "max_minutes": 20, "diet": ["vegetarian"]}
+{"id": "q38", "lang": "en", "text": "vegan guacamole, 15 minutes or less", "target_dish": "guacamole", "max_minutes": 15, "diet": ["vegan"]}
+{"id": "q39", "lang": "en", "text": "quick pancakes, under 20 minutes", "target_dish": "pancakes", "max_minutes": 20, "diet": []}
+{"id": "q40", "lang": "en", "text": "vegetarian burger, under 30 minutes", "target_dish": "hamburger", "max_minutes": 30, "diet": ["vegetarian"]}
