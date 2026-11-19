@@ -1,8 +1,8 @@
 task,model,precision,primary_metric,primary_value,secondary_metric,secondary_value,size_mb,latency_cpu_ms,latency_gpu_ms,runs,hardware
-vision,small_cnn,fp32,top-1 accuracy,0.7835,top-5 accuracy,0.9836,4.86,12.8,2.77,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-vision,vgg16_ft,fp32,top-1 accuracy,0.926,top-5 accuracy,0.9952,110.27,102.27,5.53,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-vision,vgg16_int8,int8 (ONNX QDQ),top-1 accuracy,0.9236,top-5 accuracy,0.9952,27.67,16.92,nan,100,CPU only / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-retrieval,tfidf,fp32,Recall@5,0.8825,MRR,0.9458,5.28,3.5,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-retrieval,word2vec,fp32,Recall@5,0.915,MRR,0.9708,1.0,0.63,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-retrieval,bert_e5,fp32,Recall@5,0.8679,MRR,0.9073,471.08,24.79,21.35,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
-retrieval,bert_e5_int8,int8 (ONNX dynamic),Recall@5,0.8517,MRR,0.9135,119.18,6.65,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+vision,small_cnn,fp32,top-1 accuracy,0.7835,top-5 accuracy,0.9836,4.86,7.07,1.17,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+vision,vgg16_ft,fp32,top-1 accuracy,0.926,top-5 accuracy,0.9952,110.27,83.64,5.22,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+vision,vgg16_int8,int8 (ONNX QDQ),top-1 accuracy,0.9236,top-5 accuracy,0.9952,27.67,15.11,nan,100,CPU only / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+retrieval,tfidf,fp32,Recall@5,0.8262,MRR,0.8318,5.4,1.74,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+retrieval,word2vec,fp32,Recall@5,0.88,MRR,0.9028,1.02,0.3,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+retrieval,bert_e5,fp32,Recall@5,0.9062,MRR,0.9033,471.08,11.11,9.71,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics
+retrieval,bert_e5_int8,int8 (ONNX dynamic),Recall@5,0.89,MRR,0.9136,119.18,3.83,nan,100,NVIDIA GeForce RTX 4060 Laptop GPU / AMD Ryzen 7 8845HS w/ Radeon 780M Graphics

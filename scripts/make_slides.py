@@ -25,6 +25,52 @@ from src.config import RESULTS, ROOT
 DOCS = ROOT / "docs"
 W, H = 13.333, 7.5
 
+# every number on the slides is read from the measured results
+RES = {r["model"]: r for r in csv.DictReader((RESULTS / "results.csv").open(encoding="utf-8"))}
+MET = json.loads((RESULTS / "metrics.json").read_text(encoding="utf-8"))
+VGG_FEAT = json.loads((RESULTS / "vgg16_history.json").read_text(encoding="utf-8"))["feature_extraction"]["test"]
+RECIPE_ROWS = [json.loads(line) for line in (ROOT / "data" / "recipes.jsonl").open(encoding="utf-8") if line.strip()]
+N_VEG = sum(r["vegetarian"] for r in RECIPE_ROWS)
+N_VEGAN = sum(r["vegan"] for r in RECIPE_ROWS)
+
+
+def num(model: str, col: str) -> float:
+    return float(RES[model][col])
+
+
+def ms(model: str, col: str = "latency_cpu_ms") -> str:
+    v = RES[model][col]
+    return "—" if v in ("", "nan") else f"{float(v):.1f} ms"
+
+
+def mb(model: str) -> str:
+    return f"{num(model, 'size_mb'):.1f} MB"
+
+
+def speedup(a: str, b: str) -> float:
+    return num(a, "latency_cpu_ms") / num(b, "latency_cpu_ms")
+
+
+def shrink(a: str, b: str) -> float:
+    return num(a, "size_mb") / num(b, "size_mb")
+
+
+def ret(model: str) -> str:
+    return f"Recall@5 {num(model, 'primary_value'):.3f} / MRR {num(model, 'secondary_value'):.3f}"
+
+
+def vis(model: str) -> str:
+    return f"top-1 {num(model, 'primary_value'):.3f} / top-5 {num(model, 'secondary_value'):.3f}"
+
+
+def lang(model: str, code: str) -> float:
+    return MET["retrieval"][model]["by_lang"][code]["recall@5"]
+
+
+BEST_MRR = max(("tfidf", "word2vec", "bert_e5", "bert_e5_int8"), key=lambda m: num(m, "secondary_value"))
+BEST_RET = max(("tfidf", "word2vec", "bert_e5", "bert_e5_int8"), key=lambda m: num(m, "primary_value"))
+TOP1_DROP = (num("vgg16_ft", "primary_value") - num("vgg16_int8", "primary_value")) * 100
+
 DARK = RGBColor(0x1F, 0x29, 0x37)
 GREY = RGBColor(0x6B, 0x72, 0x80)
 BLUE = RGBColor(0x1F, 0x4E, 0x79)
@@ -155,6 +201,25 @@ def slide_title(prs, name, student_id, repo, video):
         if str(target).startswith("http"):
             for run in paragraph.runs:
                 run.hyperlink.address = str(target)
+    # PowerPoint draws links in the theme's hyperlink colour, not the run colour; the
+    # default dark blue is unreadable on this navy slide, so lighten the theme colour.
+    _set_theme_link_colour(prs, "9CC8F2")
+
+
+def _set_theme_link_colour(prs, hex_rgb: str) -> None:
+    from pptx.opc.constants import RELATIONSHIP_TYPE as RT
+
+    theme = prs.slide_master.part.part_related_by(RT.THEME)
+    from lxml import etree
+
+    root = etree.fromstring(theme.blob)
+    ns = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    for tag in ("hlink", "folHlink"):
+        for el in root.findall(f".//a:clrScheme/a:{tag}", ns):
+            for child in list(el):
+                el.remove(child)
+            etree.SubElement(el, f"{{{ns['a']}}}srgbClr", val=hex_rgb)
+    theme._blob = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True)
 
 
 def slide_problem(prs):
@@ -176,8 +241,9 @@ def slide_problem(prs):
     textbox(s, 0.7, 4.0, 11.9, 1.7,
             "Top-1 accuracy on the shared 10-class test split, Recall@5 and MRR on 40 held-out "
             "queries, and a quantized model fast enough for an interactive CPU-only UI. "
-            "Measured in this homework: 0.926 top-1 (0.924 INT8), 0.915 best Recall@5, "
-            "17 ms per photo on CPU.",
+            f"Measured in this homework: {num('vgg16_ft', 'primary_value'):.3f} top-1 "
+            f"({num('vgg16_int8', 'primary_value'):.3f} INT8), {num(BEST_RET, 'primary_value'):.3f} best Recall@5, "
+            f"{num('vgg16_int8', 'latency_cpu_ms'):.0f} ms per photo on CPU.",
             size=13.5)
 
 
@@ -188,8 +254,9 @@ def slide_data(prs):
         ["Data", "Source", "Size / split"],
         ["Images", "Food-101 (Bossard et al., 2014), HF ethz/food101, 10 classes",
          "6 744 train / 750 val / 2 499 test JPEG"],
-        ["Recipes", "Food.com, Kaggle irkaal (CC0), parsed copy on HF",
-         "300 recipes, 30 per dish; 171 vegetarian, 65 vegan"],
+        ["Recipes", "Food.com, Kaggle irkaal (CC0), parsed copy on HF; methods from Kaggle RAW_recipes",
+         f"{len(RECIPE_ROWS)} recipes, 30 per dish; {N_VEG} vegetarian, {N_VEGAN} vegan; "
+         f"{sum(bool(r.get('steps')) for r in RECIPE_ROWS)} with a method"],
         ["Queries", "Written by hand for this homework", "40 queries: 20 Turkish, 20 English"],
     ], left=0.7, top=1.75, width=11.9, col_widths=[1.5, 6.3, 4.1], font_size=11.5)
     bullets(s, 0.7, 3.95, 11.9, 2.6, [
@@ -197,6 +264,7 @@ def slide_data(prs):
         "7 exact duplicate photos removed (md5); one of them sat in both the official train and test splits — a real leak.",
         "Text: normalisation (TR-aware), regex extraction of time/diet, Snowball stemming, TR→EN lexicon; the same hard filter runs for every retrieval model.",
         "Relevance is rule-based: a recipe is relevant when it has the target dish and satisfies the constraints — so the labels are reproducible.",
+        "Recipes with a photo and a step-by-step method were preferred when sampling each dish (seed 42); the corpus is never tuned to the test queries.",
     ], size=13)
     textbox(s, 0.7, 6.35, 11.9, 0.6,
             "Example: “vejetaryen, 30 dakikadan kısa” → max_minutes = 30, diet = {vegetarian}; "
@@ -220,7 +288,7 @@ def slide_techniques(prs):
     table(s, [
         ["Area", "Technique", "Where in the system"],
         ["A · Neural networks", "Small CNN from scratch (augmentation, dropout)", "Image baseline, 1.21 M parameters"],
-        ["A · Neural networks", "VGG16 transfer learning: frozen features → conv5 fine-tuning", "Image model, 0.926 top-1"],
+        ["A · Neural networks", "VGG16 transfer learning: frozen features → conv5 fine-tuning", f"Image model, {num('vgg16_ft', 'primary_value'):.3f} top-1"],
         ["A · Neural networks", "Grad-CAM on conv5_3", "Heat map shown next to the prediction"],
         ["B · Classical NLP", "Regex constraint extraction, normalisation, Snowball stemming", "Query preprocessing, TR→EN lexicon"],
         ["B · Classical NLP", "tf-idf + cosine; word2vec trained on our 300 recipes", "Two retrieval baselines"],
@@ -243,10 +311,10 @@ def slide_vision(prs):
     ], size=12.5)
     table(s, [
         ["Model", "Top-1", "Top-5"],
-        ["Small CNN (scratch)", "0.7835", "0.9836"],
-        ["VGG16 feature extraction", "0.9020", "0.9920"],
-        ["VGG16 conv5 fine-tuned", "0.9260", "0.9952"],
-        ["VGG16 INT8", "0.9236", "0.9952"],
+        ["Small CNN (scratch)", f"{num('small_cnn', 'primary_value'):.4f}", f"{num('small_cnn', 'secondary_value'):.4f}"],
+        ["VGG16 feature extraction", f"{VGG_FEAT['top1']:.4f}", f"{VGG_FEAT['top5']:.4f}"],
+        ["VGG16 conv5 fine-tuned", f"{num('vgg16_ft', 'primary_value'):.4f}", f"{num('vgg16_ft', 'secondary_value'):.4f}"],
+        ["VGG16 INT8", f"{num('vgg16_int8', 'primary_value'):.4f}", f"{num('vgg16_int8', 'secondary_value'):.4f}"],
     ], left=0.7, top=4.55, width=5.6, col_widths=[3.4, 1.1, 1.1], font_size=11.5)
     picture(s, DOCS / "fig_curves.png", left=6.6, top=1.85, width=6.1)
     textbox(s, 6.6, 5.3, 6.1, 1.2,
@@ -284,9 +352,10 @@ def slide_retrieval(prs):
     ], size=12)
     picture(s, DOCS / "fig_retrieval.png", left=6.25, top=1.95, width=6.5)
     textbox(s, 6.25, 5.45, 6.5, 1.3,
-            "The Transformer does not win here: with 300 recipes and dish-named queries the "
-            "lexical models are hard to beat, while E5 wins the descriptive queries "
-            "(chickpea fritters, “pratik tatlı”, sushi rolls).",
+            f"E5 finds the most relevant recipes (Recall@5 {num('bert_e5', 'primary_value'):.3f}); its lead comes from "
+            f"English ({lang('bert_e5', 'en'):.3f} vs. word2vec {lang('word2vec', 'en'):.3f}), while in Turkish our word2vec "
+            f"is as good ({lang('word2vec', 'tr'):.3f} vs. {lang('bert_e5', 'tr'):.3f}). E5 wins paraphrases (“meatless burgers”, "
+            "“vegan guakamole”) and loses when the dish is only described (“nohut köftesi”, “chickpea fritters”).",
             size=11, color=GREY)
 
 
@@ -295,18 +364,19 @@ def slide_quantization(prs):
     header(s, "Development — efficient models (D)", "Two quantizations, two different problems")
     bullets(s, 0.7, 1.7, 5.6, 4.5, [
         "VGG16 is convolution-heavy: dynamic quantization only touches MatMul/Gemm, so we export to ONNX and run static QDQ with 256 calibration images (per-channel, INT8).",
-        "E5 is attention/MatMul-heavy: dynamic INT8 quantization of the ONNX graph needs no calibration and loses little quality.",
+        f"E5 is attention/MatMul-heavy: dynamic INT8 quantization of the ONNX graph needs no calibration: Recall@5 {num('bert_e5', 'primary_value'):.3f} → {num('bert_e5_int8', 'primary_value'):.3f}, MRR {num('bert_e5', 'secondary_value'):.3f} → {num('bert_e5_int8', 'secondary_value'):.3f}.",
         "Both run through ONNX Runtime on CPU — that is the deployment target.",
     ], size=12)
     table(s, [
         ["", "VGG16 fp32", "VGG16 INT8", "E5 fp32", "E5 INT8"],
-        ["Size", "110.3 MB", "27.7 MB", "471.1 MB", "119.2 MB"],
-        ["CPU latency", "102.3 ms", "16.9 ms", "24.8 ms", "6.7 ms"],
-        ["Task metric", "0.926", "0.924", "0.868", "0.852"],
+        ["Size", mb("vgg16_ft"), mb("vgg16_int8"), mb("bert_e5"), mb("bert_e5_int8")],
+        ["CPU latency", ms("vgg16_ft"), ms("vgg16_int8"), ms("bert_e5"), ms("bert_e5_int8")],
+        ["Task metric", *(f"{num(m, 'primary_value'):.3f}" for m in ("vgg16_ft", "vgg16_int8", "bert_e5", "bert_e5_int8"))],
     ], left=0.7, top=4.2, width=6.0, col_widths=[1.5, 1.2, 1.2, 1.1, 1.1], font_size=10.5)
     picture(s, DOCS / "fig_tradeoff.png", left=6.5, top=1.95, width=6.3)
     textbox(s, 6.5, 5.9, 6.3, 0.9,
-            "4× smaller and 6× faster on CPU for 0.24 points of top-1 accuracy.",
+            f"VGG16: {shrink('vgg16_ft', 'vgg16_int8'):.0f}× smaller and {speedup('vgg16_ft', 'vgg16_int8'):.1f}× "
+            f"faster on CPU for {TOP1_DROP:.2f} points of top-1 accuracy.",
             size=12, color=GREEN, bold=True)
 
 
@@ -315,14 +385,14 @@ def slide_results(prs):
     header(s, "Results (R4)", "One table, every number from results/results.csv")
     table(s, [
         ["Task", "Model", "Precision", "Task metric", "Size", "CPU", "GPU"],
-        ["Vision", "small CNN (scratch)", "fp32", "top-1 0.784 / top-5 0.984", "4.9 MB", "12.8 ms", "2.8 ms"],
-        ["Vision", "VGG16 feature extraction", "fp32", "top-1 0.902 / top-5 0.992", "110.3 MB", "—", "—"],
-        ["Vision", "VGG16 conv5 fine-tuned", "fp32", "top-1 0.926 / top-5 0.995", "110.3 MB", "102.3 ms", "5.5 ms"],
-        ["Vision", "VGG16 conv5 fine-tuned", "INT8 QDQ", "top-1 0.924 / top-5 0.995", "27.7 MB", "16.9 ms", "—"],
-        ["Retrieval", "tf-idf + cosine", "fp32", "Recall@5 0.883 / MRR 0.946", "5.3 MB", "3.5 ms", "—"],
-        ["Retrieval", "word2vec (ours)", "fp32", "Recall@5 0.915 / MRR 0.971", "1.0 MB", "0.6 ms", "—"],
-        ["Retrieval", "E5 small", "fp32", "Recall@5 0.868 / MRR 0.907", "471.1 MB", "24.8 ms", "21.4 ms"],
-        ["Retrieval", "E5 small", "INT8 dynamic", "Recall@5 0.852 / MRR 0.914", "119.2 MB", "6.7 ms", "—"],
+        ["Vision", "small CNN (scratch)", "fp32", vis("small_cnn"), mb("small_cnn"), ms("small_cnn"), ms("small_cnn", "latency_gpu_ms")],
+        ["Vision", "VGG16 feature extraction", "fp32", f"top-1 {VGG_FEAT['top1']:.3f} / top-5 {VGG_FEAT['top5']:.3f}", mb("vgg16_ft"), "—", "—"],
+        ["Vision", "VGG16 conv5 fine-tuned", "fp32", vis("vgg16_ft"), mb("vgg16_ft"), ms("vgg16_ft"), ms("vgg16_ft", "latency_gpu_ms")],
+        ["Vision", "VGG16 conv5 fine-tuned", "INT8 QDQ", vis("vgg16_int8"), mb("vgg16_int8"), ms("vgg16_int8"), "—"],
+        ["Retrieval", "tf-idf + cosine", "fp32", ret("tfidf"), mb("tfidf"), ms("tfidf"), "—"],
+        ["Retrieval", "word2vec (ours)", "fp32", ret("word2vec"), mb("word2vec"), ms("word2vec"), "—"],
+        ["Retrieval", "E5 small", "fp32", ret("bert_e5"), mb("bert_e5"), ms("bert_e5"), ms("bert_e5", "latency_gpu_ms")],
+        ["Retrieval", "E5 small", "INT8 dynamic", ret("bert_e5_int8"), mb("bert_e5_int8"), ms("bert_e5_int8"), "—"],
     ], left=0.55, top=1.6, width=12.2,
         col_widths=[1.2, 3.6, 1.6, 3.4, 1.1, 1.3, 1.0], font_size=10.5)
     textbox(s, 0.55, 6.4, 12.2, 0.9,
@@ -337,22 +407,28 @@ def slide_discussion(prs):
     header(s, "Conclusion", "What the comparison showed")
     textbox(s, 0.7, 1.5, 5.8, 0.4, "Where each model wins", size=15, bold=True, color=BLUE)
     bullets(s, 0.7, 1.95, 5.7, 4.2, [
-        "Quantization is nearly free: VGG16 loses 0.24 points of top-1 for 4× less size and 6× less CPU time; E5 keeps its MRR while shrinking 4×.",
-        "On 300 recipes, lexical retrieval is strong: word2vec 0.915 Recall@5, tf-idf 0.883.",
-        "E5 wins descriptive queries (chickpea fritters, “pratik tatlı”, sushi rolls) but loses Turkish loanwords such as suşi, pankek.",
-        "INT8 put the whole app on CPU: 17 ms per photo, 7 ms per query.",
+        f"Quantization is nearly free: VGG16 loses {TOP1_DROP:.2f} points of top-1 for {shrink('vgg16_ft', 'vgg16_int8'):.0f}× "
+        f"less size and {speedup('vgg16_ft', 'vgg16_int8'):.1f}× less CPU time. E5 shrinks {shrink('bert_e5', 'bert_e5_int8'):.0f}× "
+        f"for {(num('bert_e5', 'primary_value') - num('bert_e5_int8', 'primary_value')) * 100:.1f} points of Recall@5.",
+        f"The Transformer finds the most relevant recipes (Recall@5 {num('bert_e5', 'primary_value'):.3f} vs. word2vec "
+        f"{num('word2vec', 'primary_value'):.3f}, tf-idf {num('tfidf', 'primary_value'):.3f}), thanks to English; in Turkish "
+        f"our own word2vec is as good ({lang('word2vec', 'tr'):.3f} vs. {lang('bert_e5', 'tr'):.3f}).",
+        "E5 wins paraphrases (“meatless burgers”, “vegan guakamole”, “vejetaryen hamburger”) but loses when the dish "
+        "is only described (“nohut köftesi”, “crispy chickpea fritters”, “pratik tatlı”).",
+        f"INT8 put the whole app on CPU: {num('vgg16_int8', 'latency_cpu_ms'):.0f} ms per photo, "
+        f"{num('bert_e5_int8', 'latency_cpu_ms'):.0f} ms per query.",
     ], size=12.5, spacing=6)
     textbox(s, 6.8, 1.5, 5.8, 0.4, "Limitations", size=15, bold=True, color=BLUE)
     bullets(s, 6.8, 1.95, 5.7, 2.6, [
         "10 classes, 750 images per class — wide error bars.",
         "Rule-based relevance rewards finding the dish, not a good cooking suggestion.",
-        "Recipe corpus is noisy (“Shih Tzu Sushi”) and has no steps column.",
+        "Recipe corpus is noisy (odd names, boilerplate descriptions); methods come from a second Food.com copy.",
         "One laptop, one run; no multi-seed variance.",
     ], size=12.5, spacing=6)
     textbox(s, 6.8, 4.55, 5.8, 0.4, "Next", size=15, bold=True, color=BLUE)
     textbox(s, 6.8, 4.95, 5.7, 1.2,
-            "Cross-encoder reranking, a Turkish-specific encoder, recipe steps, "
-            "and an image-quality check before predicting.",
+            "Cross-encoder reranking, a Turkish-specific encoder (E5 is weakest in Turkish), "
+            "more dishes, and an image-quality check before predicting.",
             size=12.5)
     textbox(s, 0.7, 6.55, 11.9, 0.6,
             "Failure example: the falafel photo predicted as spaghetti bolognese — Grad-CAM showed the model looking at the red sauce.",

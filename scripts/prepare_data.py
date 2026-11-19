@@ -79,22 +79,28 @@ CLASS_PATTERNS = {
     "spaghetti_bolognese": r"\bbolognese\b",
     "sushi": r"\b(sushi|maki|nigiri|california rolls?)\b",
 }
-EXCLUDE = {
-    "chocolate_cake": r"cupcake|cheesecake|pancake|frosting only|icing",
-    "pizza": r"\bdough\b|\bsauce\b|\bcrust\b$",
-    "hamburger": r"\bbun\b|\bseasoning\b|helper",
-    "pancakes": r"\bsyrup\b|\bmix\b$",
-    "caesar_salad": r"dressing$",
-    "falafel": r"sauce|dressing|\bdip\b|seasoning|mix$",
-    "guacamole": r"seasoning|\bmix$",
-    "spaghetti_bolognese": r"^bolognese sauce$",
+EXCLUDE = {  # names that match the dish word but are not that dish (sauces, sides, mixes, other dishes)
+    "chocolate_cake": r"cupcake|cheesecake|pancake|frosting only|icing|cookies?|\bbars?\b",
+    "pizza": r"\bdough\b|\bsauce\b|\bcrust\b$|pot pie|sausage|casserole|\bbites?\b|cookies?|salad|\bdips?\b|"
+             r"soup|seasoning|pasta|lasagn|burgers?",
+    "hamburger": r"\bbuns?\b|\bseasoning\b|helper|burger king|alfredo|\bbake\b|casserole|soup|\bdip\b|sauce",
+    "pancakes": r"\bsyrup\b|\bmix\b|gift|latke|potato|scallion",
+    "caesar_salad": r"dressing|crouton|\bmix\b|sandwich|pizza|wrap",
+    "falafel": r"sauce|dressing|\bdip\b|seasoning|mix$|crusted|waffle|guacamole",
+    "guacamole": r"seasoning|\bmix$|with guacamole|w/ guacamole|guacamole sauce|quesadilla|falafel",
+    "ramen": r"dessert",
+    "spaghetti_bolognese": r"^bolognese sauce$|pizza",
+    "sushi": r"sushi rice|sauce|burgers?|quesadilla|candy|fruit|filling|almonds|sandwich|dessert",
 }
 
 MEAT_FISH = re.compile(
     r"\b(beef|pork|chicken|turkey|bacon|ham|sausage|pepperoni|salami|prosciutto|"
     r"lamb|veal|duck|anchov(y|ies)|tuna|salmon|shrimp|prawns?|crab|fish|"
     r"gelatin|lard|chorizo|meat|steak|mince|ground round|crabmeat|eel|"
-    r"worcestershire|fish sauce|oyster sauce|dashi|bonito|pancetta)\b")
+    r"worcestershire|fish sauce|oyster sauce|dashi|bonito|pancetta|"
+    r"sardines?|mackerel|cod|tilapia|halibut|trout|herring|haddock|pollock|snapper|catfish|swordfish|"
+    r"clams?|mussels?|scallops?|lobster|squid|octopus|oysters?|surimi|imitation crab|kamaboko|"
+    r"caviar|roe|tobiko|masago|venison|bison|rabbit|meatballs?|hot dogs?|frankfurters?|kielbasa|spam)\b")
 ANIMAL = re.compile(
     r"\b(eggs?|egg yolks?|egg whites?|milk|butter|cream|cheese|yogurt|honey|"
     r"buttermilk|mayonnaise|parmesan|mozzarella|cheddar|ghee|whey)\b")
@@ -113,11 +119,35 @@ def _json_list(s) -> list:
 _RECIPE_ID = re.compile(r"/recipes/(\d+)/")
 
 
+def _norm_name(s) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", str(s).lower())).strip()
+
+
+def method_keys() -> set[tuple[str, int]]:
+    """(name, total minutes) of every recipe with a step-by-step method in
+    KingName1/food.com (Kaggle RAW_recipes). Used to prefer complete recipes."""
+    import glob
+
+    from huggingface_hub import snapshot_download
+
+    from src.config import DATA
+
+    path = snapshot_download("KingName1/food.com", repo_type="dataset", allow_patterns=["data/*.parquet"],
+                             cache_dir=str(DATA / "cache" / "huggingface" / "hub"))
+    raw = pd.concat([pd.read_parquet(f, columns=["name", "minutes"])
+                     for f in sorted(glob.glob(path + "/data/*.parquet"))])
+    return set(zip(raw["name"].map(_norm_name), raw["minutes"].astype(int)))
+
+
 def prepare_recipes(per_class: int) -> None:
     """Source: Food.com Recipes (Kaggle, irkaal, CC0), parsed copy on HF:
     Karo8870/food.com-parsed-dataset. Its `steps` column is broken (holds image
     URLs), so recipes are represented by name, description, category, tags and
-    ingredients."""
+    ingredients; the method and photo are added by scripts/enrich_recipes.py.
+
+    Recipes shown in the app should be complete, so within each dish we prefer
+    (1) photo + method, (2) method only, (3) photo only, (4) neither, and draw
+    at random (seed 42) inside each tier."""
     from huggingface_hub import hf_hub_download
 
     path = hf_hub_download("Karo8870/food.com-parsed-dataset", "parsed_recipes.csv", repo_type="dataset")
@@ -126,15 +156,24 @@ def prepare_recipes(per_class: int) -> None:
     df["minutes"] = df["cooking_time"].fillna(0) + df["preparation_time"].fillna(0)
     df = df[(df["minutes"] > 0) & (df["minutes"] <= 24 * 60)]
     df = df[df["description"].astype(str).str.len() > 20]
+    keys = method_keys()
 
     out = []
+    taken: set[int] = set()
     for cls in CLASSES:
         sub = df[df["name_l"].str.contains(CLASS_PATTERNS[cls], regex=True)]
         if cls in EXCLUDE:
             sub = sub[~sub["name_l"].str.contains(EXCLUDE[cls], regex=True)]
         n_match = len(sub)
-        sub = sub.sample(n=min(per_class, len(sub)), random_state=SEED)
-        print(f"{cls:22s} matched {n_match:5d} -> kept {len(sub)}")
+        has_img = sub["images"].astype(str).str.contains("http")
+        has_steps = pd.Series([(_norm_name(n), int(m)) in keys for n, m in zip(sub["name"], sub["minutes"])],
+                              index=sub.index)
+        tier = (~has_steps).astype(int) * 2 + (~has_img).astype(int)  # 0 both, 1 steps, 2 photo, 3 neither
+        sub = sub.assign(tier=tier).sample(frac=1, random_state=SEED).sort_values("tier", kind="stable")
+        sub = sub[~sub.index.isin(taken)].head(per_class)  # one recipe never belongs to two dishes
+        taken.update(sub.index)
+        print(f"{cls:22s} matched {n_match:5d} -> kept {len(sub)} "
+              f"(photo+method {int((sub.tier == 0).sum())}, method only {int((sub.tier == 1).sum())})")
         for idx, r in sub.iterrows():
             ingredients = [i.get("name", "") for i in _json_list(r["ingredients"]) if isinstance(i, dict)]
             tags = [t for t in _json_list(r["tags"]) if isinstance(t, str)]
@@ -165,12 +204,37 @@ def prepare_recipes(per_class: int) -> None:
     print(f"wrote {len(out)} recipes ({veg} vegetarian) -> {RECIPES}")
 
 
+def diet_labels(ingredients: list[str]) -> tuple[bool, bool]:
+    ing_text = " ".join(ingredients).lower()
+    vegetarian = not MEAT_FISH.search(ing_text)
+    return vegetarian, vegetarian and not ANIMAL.search(ing_text)
+
+
+def relabel() -> None:
+    """Re-apply the diet rules to data/recipes.jsonl in place (same recipes, no download)."""
+    recs = [json.loads(line) for line in RECIPES.open(encoding="utf-8") if line.strip()]
+    for rec in recs:
+        veg, vegan = diet_labels(rec["ingredients"])
+        if (veg, vegan) != (rec["vegetarian"], rec["vegan"]):
+            print(f"  {rec['dish']:20s} {rec['name'][:50]:50s} veg {rec['vegetarian']}->{veg} vegan {rec['vegan']}->{vegan}")
+        rec["vegetarian"], rec["vegan"] = veg, vegan
+    with RECIPES.open("w", encoding="utf-8") as f:
+        for rec in recs:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    print(f"{len(recs)} recipes, {sum(r['vegetarian'] for r in recs)} vegetarian, "
+          f"{sum(r['vegan'] for r in recs)} vegan")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-images", action="store_true")
     ap.add_argument("--skip-recipes", action="store_true")
+    ap.add_argument("--relabel", action="store_true", help="only re-apply diet labels to data/recipes.jsonl")
     ap.add_argument("--per-class", type=int, default=30)
     a = ap.parse_args()
+    if a.relabel:
+        relabel()
+        sys.exit()
     if not a.skip_recipes:
         prepare_recipes(a.per_class)
     if not a.skip_images:

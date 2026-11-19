@@ -21,9 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import DATA, IMAGES, MODELS, RAW, ROOT
 
-BASE = "https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/latest/download"
-RELEASE_URL = f"{BASE}/swe015-models.zip"
-IMAGES_URL = f"{BASE}/swe015-food10.zip"
+REPO = "https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases"
+BASE = f"{REPO}/latest/download"
+RELEASE_URL = f"{BASE}/swe015-models.zip"  # weights + indexes for the current recipe corpus
+# the 10-class image subset never changes, so it stays in the first release
+IMAGES_URL = f"{REPO}/download/v1.0-weights/swe015-food10.zip"
 
 
 def fetch(url: str, dest: Path) -> None:

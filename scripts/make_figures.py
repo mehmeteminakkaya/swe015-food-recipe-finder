@@ -78,8 +78,8 @@ def tradeoff() -> None:
     for ax in axes:
         ax.spines[["top", "right"]].set_visible(False)
         ax.tick_params(labelsize=9)
-    fig.suptitle("Quantization trade-off: VGG16 gets 4x smaller and 6x faster on CPU, "
-                 "top-1 drops 0.926 → 0.924", fontsize=10)
+    fig.suptitle(f"Quantization trade-off: VGG16 gets {sizes[1] / sizes[2]:.0f}x smaller and "
+                 f"{lat[1] / lat[2]:.1f}x faster on CPU, top-1 {acc[1]:.3f} → {acc[2]:.3f}", fontsize=10)
     fig.tight_layout()
     fig.savefig(DOCS / "fig_tradeoff.png", dpi=200)
     print("wrote", DOCS / "fig_tradeoff.png")

@@ -11,12 +11,12 @@ Son iki satır (video ve HF) dışındaki her şey bu repoda tamamlanmış durum
 | **R2** Dört teknik alanın hepsi | ✅ | Slayt 5 (teknik haritası) · A: `src/vision/small_cnn.py`, `vgg.py`, Grad-CAM · B: `src/retrieval/text.py`, `tfidf.py`, `w2v.py` · C: `src/retrieval/bert.py` · D: `scripts/quantize.py`, `src/retrieval/quantize.py` |
 | **R3** Dört model aynı test setinde | ✅ | Görüntü: 2 499 test görseli (tüm modeller) · Arama: 40 sorgu (`data/queries.jsonl`) · `results/metrics.json` |
 | **R4** Sonuç tablosu: metrik + boyut + latency | ✅ | `results/results.csv` (100 koşu, CPU/GPU, donanım sütunu) · slayt 10 |
-| **R5** Uygulama quantized Transformer'ı çalıştırır | ✅ | `app.py` varsayılan: VGG16 INT8 (QDQ) + E5 INT8 (dynamic); model seçiciyle fp32 karşılaştırması |
+| **R5** Uygulama quantized Transformer'ı çalıştırır | ✅ | `app.py` varsayılan: VGG16 INT8 (QDQ) + E5 INT8 (dynamic); model seçiciyle fp32 karşılaştırması; "Compare models" paneli tüm modelleri yan yana gösterir |
 | **R6** Mimari diyagramı (kodla uyumlu) | ✅ | `docs/architecture.png` · üretici: `python scripts/architecture.py` |
-| **R7** Kod deposu: README, requirements, ağırlık yok | ✅ | https://github.com/mehmeteminakkaya/swe015-food-recipe-finder · kurulum: `pip install -r requirements.txt` → `python scripts/download_data.py --with-images` → `python app.py` · ağırlıklar release'te (`v1.0-weights`), CI yeşil |
+| **R7** Kod deposu: README, requirements, ağırlık yok | ✅ | https://github.com/mehmeteminakkaya/swe015-food-recipe-finder · kurulum: `pip install -r requirements.txt` → `python scripts/download_data.py --with-images` → `python app.py` · ağırlıklar release'te (en güncel: `v1.1-weights`), CI yeşil |
 | **R8** AI kullanım slaytı | ✅ | Slayt 12 · README "AI usage" |
 | Sunum 8–12 slayt, Intro/Development/Conclusion | ✅ | `docs/slides.pdf` (12 slayt), ilk slaytta isim/numara/repo/video alanı |
-| 2 dakikalık video (sesli, canlı demo) | ❌ **çekilecek** | `docs/VIDEO_SCRIPT.md` senaryosu hazır |
+| 2 dakikalık video (sesli, canlı demo) | ⚠️ **sessiz kayıt hazır, ses eklenecek** | `python scripts/record_demo.py` → `dist/video/demo_silent.mp4` (1:59); anlatım metni `docs/VIDEO_NARRATION.md`; ses ekleme: `python scripts/record_demo.py --voice-dir <klasör>` |
 | Ağırlıkların dış barındırılması (HF/Drive) | ⚠️ GitHub release ile karşılandı | HF'ye taşımak isterseniz: `huggingface-cli login` → `python scripts/upload_models.py --repo <kullanıcı>/swe015-food-recipe-finder` |
 
 ## Grading kapıları
@@ -59,6 +59,7 @@ Son iki satır (video ve HF) dışındaki her şey bu repoda tamamlanmış durum
 python app.py          # http://127.0.0.1:7860
 ```
 
-Model seçiciler: görüntüde `VGG16 INT8 (varsayılan)` / `VGG16 fp32` / `Küçük CNN`;
-aramada `E5 INT8 (varsayılan)` / `E5 fp32` / `tf-idf` / `word2vec`.
+Model seçiciler: görüntüde `VGG16 INT8 (default)` / `VGG16 fp32` / `Small CNN (from scratch)`;
+aramada `E5 INT8 (default)` / `E5 fp32` / `tf-idf + cosine` / `word2vec (trained here)`.
+Fotoğraf yüklenince otomatik tanınır; istek kutusunda Enter aramayı başlatır.
 Hazır test görselleri: `data/raw/food10/test/{pizza,falafel,...}/*.jpg`.

@@ -35,10 +35,14 @@ class QuerySetTests(unittest.TestCase):
                 self.assertEqual(c.max_minutes, q["max_minutes"])
                 self.assertEqual(c.diet, expected)
 
-    def test_every_query_has_enough_relevant_recipes(self):
+    def test_every_query_has_a_relevant_recipe(self):
+        # Recall@5 and MRR are undefined for a query without a relevant recipe. The
+        # corpus is sampled independently of the queries (photo + method preferred,
+        # seed 42), so a narrow query such as "vegetarian burger, under 30 minutes"
+        # may have only one match; the corpus is never tuned to the test queries.
         for q in self.queries:
             with self.subTest(q=q["id"]):
-                self.assertGreaterEqual(len(relevant_ids(q, self.recipes)), 3)
+                self.assertGreaterEqual(len(relevant_ids(q, self.recipes)), 1)
 
 
 if __name__ == "__main__":

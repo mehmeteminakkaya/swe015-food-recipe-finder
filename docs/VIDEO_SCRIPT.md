@@ -1,4 +1,8 @@
-# 2 dakikalık video — çekim senaryosu
+# 2 dakikalık video — çekim senaryosu (eski)
+
+> **Güncel değil.** Video artık `scripts/record_demo.py` ile otomatik kaydediliyor ve
+> anlatım İngilizce: güncel sahne listesi ve metinler `docs/VIDEO_NARRATION.md` içinde.
+> Bu dosya yalnızca ilk elle çekim planı olarak duruyor.
 
 Video, ödevin "uygulama gerçekten çalışıyor" kanıtı. Kurallar: ekran kaydı + sesli anlatım,
 en fazla 2:00, YouTube'da **unlisted** veya Google Drive'da "linki olan herkes" olarak paylaş,
@@ -9,7 +13,7 @@ gizli pencerede linki kontrol et.
 1. `python app.py` çalıştır, tarayıcıda http://127.0.0.1:7860 aç (modeller önceden yüklendiği için ilk tıklama hızlı olur).
 2. Masaüstünde iki test fotoğrafı hazırla:
    - `data/raw/food10/test/pizza/validation_00500.jpg` (kolay örnek)
-   - `data/raw/food10/test/falafel/*.jpg` içinden bir tane (zor/hata örneği)
+   - `data/raw/food10/test/falafel/validation_01766.jpg` (zor/hata örneği: VGG16 INT8 bunu %41 ile spaghetti bolognese sanıyor; slayt 7'deki Grad-CAM görseli de bu fotoğraf)
 3. Tarayıcı penceresini 1080p'ye ayarla, yer imleri çubuğunu kapat, bildirimleri kapat.
 4. Kayıt: Windows'ta `Win+G` veya OBS Studio, mikrofon açık, 1080p / 30 fps.
 

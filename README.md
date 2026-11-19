@@ -3,8 +3,11 @@
 [![tests](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml/badge.svg)](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml)
 
 Photograph a dish, get the predicted dish with a Grad-CAM heat map, then type what
-you want in Turkish or English ("vejetaryen, 30 dakikadan kısa" / "vegetarian,
-under 30 minutes") and get the five best-matching recipes with similarity scores.
+you want in English or Turkish ("vegetarian, under 30 minutes" / "vejetaryen, 30
+dakikadan kısa") and get the five best-matching recipes: the best one in full (photo,
+ingredients with quantities, step-by-step method, nutrition) and four more as cards.
+A "Compare models" panel runs the same photo and request through every model of the
+homework side by side.
 
 The homework asks for one task solved with four models of increasing sophistication
 on the same held-out test data, and for the quantized Transformer to run inside the
@@ -27,7 +30,7 @@ python app.py                     # http://127.0.0.1:7860
 
 The weights are 200 MB (small CNN, VGG16 fp32 + INT8, tf-idf, word2vec, E5 INT8) and
 the images are the 10-class subset; both live in the GitHub release
-(<https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/tag/v1.0-weights>),
+(<https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/releases/latest>),
 which keeps the repository free of large binary files. `download_data.py` also caches
 the multilingual encoder so the first run works offline.
 
@@ -36,12 +39,25 @@ training on an RTX 4060 Laptop):
 
 ```bash
 python scripts/prepare_data.py      # Food-101 subset + recipe corpus
+python scripts/enrich_recipes.py    # photo, quantities, method, nutrition for the cards
 python scripts/dedupe_images.py     # remove the 7 exact duplicate photos
 python scripts/build_indexes.py     # tf-idf, word2vec, E5 fp32, E5 INT8
 python scripts/train_cnn.py         # small CNN from scratch
 python scripts/train_vgg.py         # VGG16 feature extraction + conv5 fine-tuning
 python scripts/quantize.py          # VGG16 -> ONNX -> INT8 QDQ
 ```
+
+## Using the app
+
+1. **Photo.** Upload or paste a photo, or click an example. It is recognised at once
+   with the INT8 VGG16; the heat map shows where the model looked.
+2. **Request.** Type what you want and press Enter (or click an example request).
+   Time and diet limits are read from the text; the panel shows how the request was
+   understood and how many recipes were left after the filters.
+3. **Recipes.** The page scrolls to the results: the best match in full, four more
+   below it. A new photo re-runs the request for the new dish.
+4. **Compare models.** The same photo through all three image models and the same
+   request through all four search models, side by side.
 
 ## What is in the box
 
@@ -59,8 +75,14 @@ python scripts/quantize.py          # VGG16 -> ONNX -> INT8 QDQ
 | Data | Source | Size / split |
 |---|---|---|
 | Images | Food-101 (Bossard et al., 2014), HF `ethz/food101`, 10 classes | 6 744 train / 750 val / 2 499 test. The official test split is the shared held-out set for every vision model. Seven exact duplicates were removed; one of them was also present in train, which would have leaked a test photo into training. |
-| Recipes | Food.com Recipes (Kaggle `irkaal`, CC0), parsed copy HF `Karo8870/food.com-parsed-dataset` | 300 recipes, 30 per dish. 171 vegetarian, 65 vegan (rule-based from the ingredient list) |
+| Recipes | Food.com Recipes (Kaggle `irkaal`, CC0), parsed copy HF `Karo8870/food.com-parsed-dataset`; step-by-step methods from Kaggle RAW_recipes (HF `KingName1/food.com`), matched on name + total time | 300 recipes, 30 per dish. 162 vegetarian, 58 vegan (rule-based from the ingredient list). 292 with a method, 239 with a photo |
 | Test queries | Written by hand | 40 queries, 20 Turkish / 20 English, in `data/queries.jsonl` |
+
+Within each dish, recipes that have a photo and a method are preferred, then a method
+only, then a photo only; inside each tier the draw is random (seed 42). Names that
+match the dish word but are another dish (pizza dip, sushi rice, Caesar dressing…)
+are excluded, and no recipe belongs to two dishes. The corpus is never tuned to the
+test queries.
 
 Relevance is defined by rule, not by hand: a recipe is relevant for a query when it
 belongs to the query's target dish **and** satisfies the query's constraints (total
@@ -81,32 +103,34 @@ CPU deployment.
 
 | Model | Precision | Top-1 | Top-5 | Size (MB) | CPU (ms) | GPU (ms) |
 |---|---|---|---|---|---|---|
-| Small CNN from scratch | fp32 | 0.7835 | 0.9836 | 4.9 | 12.8 | 2.8 |
+| Small CNN from scratch | fp32 | 0.7835 | 0.9836 | 4.9 | 7.1 | 1.2 |
 | VGG16, feature extraction only | fp32 | 0.9020 | 0.9920 | 110.3 | — | — |
-| VGG16, conv5 fine-tuned | fp32 | **0.9260** | **0.9952** | 110.3 | 102.3 | 5.5 |
-| VGG16, conv5 fine-tuned | INT8 QDQ | 0.9236 | 0.9952 | **27.7** | **16.9** | — |
+| VGG16, conv5 fine-tuned | fp32 | **0.9260** | **0.9952** | 110.3 | 83.6 | 5.2 |
+| VGG16, conv5 fine-tuned | INT8 QDQ | 0.9236 | 0.9952 | **27.7** | **15.1** | — |
 
 **Recipe retrieval** (40 queries, Recall@5 / MRR):
 
 | Model | Precision | Recall@5 | MRR | TR Recall@5 | EN Recall@5 | Size (MB) | CPU (ms) |
 |---|---|---|---|---|---|---|---|
-| tf-idf + cosine | fp32 | 0.8825 | 0.9458 | 0.885 | 0.880 | 5.3 | 3.5 |
-| word2vec (ours) | fp32 | **0.9150** | **0.9708** | 0.960 | 0.870 | 1.0 | 0.6 |
-| E5 small | fp32 | 0.8679 | 0.9073 | 0.852 | 0.883 | 471.1 | 24.8 |
-| E5 small | INT8 dynamic | 0.8517 | 0.9135 | 0.810 | 0.893 | **119.2** | **6.7** |
+| tf-idf + cosine | fp32 | 0.8262 | 0.8318 | 0.820 | 0.833 | 5.4 | 1.7 |
+| word2vec (ours) | fp32 | 0.8800 | 0.9028 | **0.880** | 0.880 | **1.0** | **0.3** |
+| E5 small | fp32 | **0.9062** | 0.9033 | 0.863 | **0.950** | 471.1 | 11.1 |
+| E5 small | INT8 dynamic | 0.8900 | **0.9136** | 0.855 | 0.925 | 119.2 | 3.8 |
 
 What the table says, in one paragraph: quantization is nearly free on this task —
-VGG16 loses 0.24 points of top-1 accuracy for a 4× smaller and 6× faster CPU model,
-and the E5 encoder keeps MRR while getting 4× smaller and 3.7× faster. On the
-retrieval side the honest finding is that the Transformer does **not** win: with 300
-recipes and dish-named queries, lexical matches and our word2vec model are hard to
-beat, while the dense encoder wins on the descriptive queries (q19, q20, q28, q29,
-q30, q35, q39) and loses where the dish name is a Turkish loanword.
+VGG16 loses 0.24 points of top-1 accuracy for a 4× smaller and 5.5× faster CPU model,
+and the E5 encoder becomes 4× smaller and 2.9× faster for 1.6 points of Recall@5
+(its MRR even rises slightly). The multilingual Transformer finds the most relevant
+recipes overall, and its lead comes from English (0.950 vs. 0.880); in Turkish our own
+word2vec is as good (0.880 vs. 0.863). E5 wins paraphrases of the dish ("meatless
+burgers", "vegan guakamole", "vejetaryen hamburger") and loses when the dish is only
+described ("nohut köftesi", "crispy chickpea fritters", "pratik tatlı").
 
 ## Reproducing the results
 
 ```bash
 python scripts/prepare_data.py      # Food-101 subset + recipe corpus
+python scripts/enrich_recipes.py    # photo, quantities, method, nutrition (display only)
 python scripts/dedupe_images.py     # remove the 7 exact duplicate photos
 python scripts/build_indexes.py     # tf-idf, word2vec, E5 fp32, E5 INT8
 python scripts/train_cnn.py         # small CNN from scratch      (~18 min)
@@ -115,8 +139,19 @@ python scripts/quantize.py          # VGG16 -> ONNX -> INT8 QDQ (256 calibration
 python scripts/evaluate.py          # metrics -> results/metrics.json
 python scripts/benchmark.py         # size/latency -> results/results.csv
 python scripts/gradcam_demo.py      # docs/gradcam_example.png
-python scripts/architecture.py      # docs/architecture.png
+python scripts/architecture.py      # docs/architecture.png (sizes/latency from results.csv)
+python scripts/make_figures.py      # docs/fig_*.png
+python scripts/make_slides.py       # docs/slides.pptx (every number read from results/)
 python scripts/smoke_test.py        # exercises app.py without a browser
+```
+
+The demo video is recorded by a script too (needs `python app.py` running and
+`pip install playwright==1.48.0 imageio-ffmpeg==0.5.1 && python -m playwright install ffmpeg`):
+
+```bash
+python scripts/record_demo.py                      # dist/video/demo_silent.mp4 + timeline.json
+python scripts/make_storyboard.py                  # dist/video/storyboard.html
+python scripts/record_demo.py --voice-dir <clips>  # add the narration (docs/VIDEO_NARRATION.md)
 ```
 
 ## Layout
@@ -149,8 +184,8 @@ python -m unittest discover -s tests -v
 They lock down the constraint parser (TR/EN time and diet phrasings, the
 "quick → 30 minutes" rule, the "vegan implies vegetarian" rule), the Turkish
 dotted/dotless I normalisation, and the fact that every query in `data/queries.jsonl`
-still parses to the constraints stored next to it and has at least three relevant
-recipes. A wording change that would silently alter the benchmark fails the build.
+still parses to the constraints stored next to it and has at least one relevant
+recipe. A wording change that would silently alter the benchmark fails the build.
 
 ## Notes and limitations
 
@@ -159,10 +194,15 @@ recipes. A wording change that would silently alter the benchmark fails the buil
 - A real failure case, shown in `docs/gradcam_example.png`: a falafel photo is
   predicted as spaghetti bolognese (41 %). The heat map shows that the model reacts to
   the red sauce and the plate edge rather than to the falafel itself.
-- `recipes.jsonl` comes from a noisy parsed copy of Food.com: a few names are
-  off-topic (e.g. "Shih Tzu Sushi"), `url` is only filled for 104/300 rows, and the
-  `steps` column of the source is broken, so recipes are represented by name,
-  description, category, tags and ingredients only.
+- `recipes.jsonl` comes from a noisy parsed copy of Food.com: a few names are still
+  borderline (e.g. "Sushi Ginger"), and its `steps` column is broken. Retrieval
+  therefore indexes name, description, category, tags and ingredients only; the method
+  shown in the app comes from a second Food.com copy (292/300 matched on name + time),
+  with nutrition-panel lines that some authors pasted into their method removed.
+  Photos are Food.com links (239/300); recipes without one show a placeholder.
+- Three recipes were labelled vegetarian although they contain fish (sardines,
+  pollock, surimi); the meat/fish word list was extended and the labels re-derived
+  (`python scripts/prepare_data.py --relabel`).
 - Relevance is rule-based, so the retrieval benchmark rewards finding recipes of the
   target dish; it does not measure whether the recipe is a good cooking suggestion.
 - The E5 encoder is a BERT-based multilingual encoder chosen over the MiniLM model
@@ -173,6 +213,6 @@ recipes. A wording change that would silently alter the benchmark fails the buil
 
 ## AI usage
 
-AI coding assistants were used to write and debug the code, to draft the slides and
-this README. Every number in the presentation comes from the runs in this repository
+AI coding assistants (Claude, DeepSeek) were used to write and debug the code, to
+design the app, to script the demo recording, and to draft the slides and this README. Every number in the presentation comes from the runs in this repository
 (`results/results.csv`); no results were copied from papers or model cards.
