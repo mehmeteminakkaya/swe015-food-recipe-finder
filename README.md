@@ -2,6 +2,8 @@
 
 [![tests](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml/badge.svg)](https://github.com/mehmeteminakkaya/swe015-food-recipe-finder/actions/workflows/tests.yml)
 
+**Demo video (2 min):** <https://youtu.be/QuMgyBiunCc> · **Slides:** [`docs/slides.pdf`](docs/slides.pdf)
+
 Photograph a dish, get the predicted dish with a Grad-CAM heat map, then type what
 you want in English or Turkish ("vegetarian, under 30 minutes" / "vejetaryen, 30
 dakikadan kısa") and get the five best-matching recipes: the best one in full (photo,
@@ -49,9 +51,9 @@ python scripts/quantize.py          # VGG16 -> ONNX -> INT8 QDQ
 
 ## Using the app
 
-1. **Photo.** Upload or paste a photo, or click an example. It is recognised at once
+1. **Photo.** Upload or paste a photo. It is recognised at once
    with the INT8 VGG16; the heat map shows where the model looked.
-2. **Request.** Type what you want and press Enter (or click an example request).
+2. **Request.** Type what you want and press Enter.
    Time and diet limits are read from the text; the panel shows how the request was
    understood and how many recipes were left after the filters.
 3. **Recipes.** The page scrolls to the results: the best match in full, four more

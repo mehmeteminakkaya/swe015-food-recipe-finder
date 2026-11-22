@@ -11,7 +11,15 @@ import re
 import time
 from pathlib import Path
 
+import os
+import tempfile
+
 import src.config  # noqa: F401  -- sets HF/TORCH cache dirs before huggingface_hub loads
+
+# Uploaded photos are cached by Gradio and served back to the page. Inside a synced
+# folder (this repo lives in OneDrive) the sync client can touch a file while it is
+# being served, and the photo shows up broken; keep that cache in the local temp dir.
+os.environ.setdefault("GRADIO_TEMP_DIR", os.path.join(tempfile.gettempdir(), "swe015-gradio"))
 
 import gradio as gr
 import numpy as np
@@ -101,7 +109,9 @@ def gradcam(img: Image.Image, cls_idx: int) -> np.ndarray:
     with GradCAM(model=model, target_layers=[vgg.target_layer(model)]) as cam:
         heat = cam(input_tensor=tensor, targets=[ClassifierOutputTarget(cls_idx)])[0]
     rgb = np.asarray(img.resize((ck["img_size"], ck["img_size"])), dtype=np.float32) / 255.0
-    return show_cam_on_image(rgb, heat, use_rgb=True)
+    overlay = show_cam_on_image(rgb, heat, use_rgb=True)
+    # the model sees a square; give the overlay back the photo's own shape so the two images match
+    return np.asarray(Image.fromarray(overlay).resize(img.size, Image.BILINEAR))
 
 
 def classify(img: Image.Image, photo_model: str):
@@ -223,8 +233,8 @@ def _pretty(name: str) -> str:
 
 
 PHOTO_EMPTY = (
-    '<div class="rf-empty">Upload a photo and press <b>Recognise dish</b>. '
-    "The prediction and where the model looked will appear here.</div>"
+    '<div class="rf-empty">Upload or paste a photo. It is recognised straight away, '
+    "and the dish and where the model looked appear here.</div>"
 )
 RECIPES_EMPTY = (
     '<div class="rf-empty">Say what you would like to cook, or recognise a photo first. '
@@ -257,14 +267,17 @@ def render_prediction(cls, prob, ms: float, photo_model: str) -> str:
             f'<span class="rf-bar-val">{p:.1%}</span></li>'
         )
     warn = ""
-    if conf < LOW_CONFIDENCE:
-        warn = ('<p class="rf-warn">Low confidence. The photo may not clearly show one of the ten dishes, '
-                "so treat this guess with care.</p>")
+    second = float(prob[order[1]])
+    # unsure = low confidence, or a close runner-up (falafel read as bolognese at 41 % vs 28 %)
+    if conf < 0.5 or conf - second < 0.15:
+        warn = (f'<p class="rf-warn">Not sure: only {conf:.1%} confident, and it could also be '
+                f"{_esc(_pretty(cls[order[1]]))} ({second:.1%}). Check the heat map before trusting it.</p>")
+    kicker = "This might be" if warn else "This looks like"
     return (
         '<div class="rf-pred">'
-        '<p class="rf-pred-kicker">This looks like</p>'
-        f'<h2 class="rf-dish">{_esc(_pretty(cls[top]))}</h2>'
-        f'<ul class="rf-bars">{"".join(bars)}</ul>{warn}'
+        f'<p class="rf-pred-kicker">{kicker}</p>'
+        f'<h2 class="rf-dish">{_esc(_pretty(cls[top]))}</h2>{warn}'   # warning above the fold, right under the name
+        f'<ul class="rf-bars">{"".join(bars)}</ul>'
         f'<p class="rf-meta">{_esc(photo_model)}, {ms:.0f} ms. {_cam_note(photo_model)}</p>'
         "</div>"
     )
@@ -338,7 +351,9 @@ def _ingredients(rec) -> str:
 
 def _method(rec) -> str:
     if rec.get("steps"):
-        return '<ol class="rf-steps">' + "".join(f"<li>{_txt(s)}</li>" for s in rec["steps"]) + "</ol>"
+        # the source steps get a full stop added: drop it after "!", "?", ":" ("Bon appetit!.")
+        steps = (re.sub(r"([!?:.])\s*\.$", r"\1", str(s).strip()) for s in rec["steps"])
+        return '<ol class="rf-steps">' + "".join(f"<li>{_txt(s)}</li>" for s in steps) + "</ol>"
     link = (f' <a href="{_esc(rec["url"])}" target="_blank" rel="noopener">Open it on Food.com</a>.'
             if rec.get("url") else "")
     return f'<p class="rf-nomethod">The dataset has no step-by-step method for this recipe.{link}</p>'
@@ -408,7 +423,7 @@ def render_card(rec, score: float, rank: int) -> str:
         f'{_media(rec, "rf-card-media")}'
         '<div class="rf-card-body">'
         f'<div class="rf-rankline"><span class="rf-rank">{rank}</span>{_score(score)}</div>'
-        f"<h3>{_title(rec)}</h3>"
+        f'<h3 title="{_txt(rec["name"])}">{_title(rec)}</h3>'
         f'<p class="rf-card-meta">{_esc(meta)}</p>'
         f'<div class="rf-chips">{_diet_chip(rec)}</div>'
         '<details><summary>Full recipe</summary>'
@@ -450,17 +465,18 @@ def render_recipes(res, text_model: str) -> str:
         return '<div class="rf-empty">No recipe matches this request. Loosen the time or diet limit and try again.</div>'
     (top, top_score), rest = hits[0], hits[1:]
     cards = "".join(render_card(r, s, i) for i, (r, s) in enumerate(rest, 2))
-    return render_featured(top, top_score) + (f'<div class="rf-grid">{cards}</div>' if cards else "")
+    more = f'<h4 class="rf-more">Other matches</h4><div class="rf-grid">{cards}</div>' if cards else ""
+    return render_featured(top, top_score) + more
 
 
 def ui_predict(img, photo_model: str):
     if img is None:
-        return None, "", PHOTO_EMPTY
+        return None, "", PHOTO_EMPTY, gr.update(visible=False)
     img = img.convert("RGB")
     cls, prob, ms = classify(img, photo_model)
     top = int(prob.argmax())
     cam_img = gradcam(img, top)
-    return cam_img, _pretty(cls[top]), render_prediction(cls, prob, ms, photo_model)
+    return cam_img, _pretty(cls[top]), render_prediction(cls, prob, ms, photo_model), gr.update(visible=True)
 
 
 def ui_search(text: str, dish: str, text_model: str):
@@ -469,7 +485,7 @@ def ui_search(text: str, dish: str, text_model: str):
 
 
 def ui_clear():
-    return None, "", PHOTO_EMPTY
+    return None, "", PHOTO_EMPTY, gr.update(visible=False)
 
 
 def ui_reset_recipes():
@@ -496,7 +512,8 @@ def ui_compare_photo(img) -> str:
             f'<b class="rf-cmp-dish">{_esc(_pretty(cls[top]))}</b>'
             f'<span class="rf-cmp-stat">{float(prob[top]):.1%} confidence · {ms:.0f} ms</span></div>'
         )
-    return f'<div class="rf-cmp rf-cmp-3">{"".join(cards)}</div>'
+    return (f'<h4 class="rf-cmp-group">Image models <span>same photo</span></h4>'
+            f'<div class="rf-cmp rf-cmp-3">{"".join(cards)}</div>')
 
 
 def ui_compare_search(text: str, dish: str) -> str:
@@ -508,14 +525,16 @@ def ui_compare_search(text: str, dish: str) -> str:
     for m, res in runs:
         hits, _, n_pool, _, ms = res
         items = "".join(
-            f'<li class="{"is-shared" if r["id"] in shown else ""}"><span>{_txt(r["name"])}</span>'
+            f'<li class="{"is-shared" if r["id"] in shown and m != TEXT_MODELS[0] else ""}"><span>{_txt(r["name"])}</span>'
             f"<small>{s:.2f}</small></li>" for r, s in hits)
         default = " is-default" if m == TEXT_MODELS[0] else ""
         cards.append(
             f'<div class="rf-cmp-card{default}"><span class="rf-cmp-model">{_esc(m)}</span>'
-            f'<span class="rf-cmp-stat">{ms:.0f} ms · {n_pool} candidates</span><ol>{items}</ol></div>'
+            f'<span class="rf-cmp-stat">{f"{ms:.0f} ms" if ms >= 1 else "<1 ms"} · {n_pool} candidates</span>'
+            f'<ol>{items}</ol></div>'
         )
-    return (f'<div class="rf-cmp rf-cmp-4">{"".join(cards)}</div>'
+    return (f'<h4 class="rf-cmp-group">Search models <span>same request</span></h4>'
+            f'<div class="rf-cmp rf-cmp-4">{"".join(cards)}</div>'
             '<p class="rf-meta">Bold recipes are also in the default model\'s top five. '
             "The number is each model's own cosine similarity, so it is not comparable across models.</p>")
 
@@ -539,7 +558,9 @@ SCROLL_TO_RECIPES = """() => { setTimeout(() => {
 }, 120); }"""
 FOCUS_REQUEST = """() => { setTimeout(() => {
   const t = document.querySelector('#rf-query textarea, #rf-query input');
-  if (t && !t.value) t.focus({preventScroll: true});
+  // desktop only: on a phone the keyboard would cover the result that just appeared
+  if (matchMedia('(pointer: fine)').matches) { if (t && !t.value) t.focus({preventScroll: true}); }
+  else { const r = document.querySelector('#rf-pred'); if (r) r.scrollIntoView({behavior: 'smooth', block: 'start'}); }
 }, 120); }"""
 
 
@@ -601,7 +622,7 @@ button.secondary { border-radius: 10px !important; }
 .rf-bar.is-top .rf-bar-track { height: 12px; }
 .rf-bar.is-top .rf-bar-track span { background: var(--rf-saffron); }
 .rf-bar-val { text-align: right; font-variant-numeric: tabular-nums; }
-.rf-warn { margin: 14px 0 0; padding: 10px 12px; border-left: 3px solid var(--rf-tomato); background: #FBEDEA;
+.rf-warn { margin: 14px 0 16px; padding: 10px 12px; border-left: 3px solid var(--rf-tomato); background: #FBEDEA;
   color: #7A2617; font-size: 14.5px; border-radius: 0 8px 8px 0; }
 .rf-meta { color: var(--rf-muted); font-size: 13px; margin: 14px 0 0; line-height: 1.45; }
 
@@ -708,7 +729,6 @@ button.secondary { border-radius: 10px !important; }
 .rf-noimg span { font-family: 'Young Serif', serif; font-size: 26px; color: var(--rf-ink); text-transform: capitalize; }
 .rf-noimg small { font-size: 12.5px; color: var(--rf-muted); }
 
-#rf-cam img, #rf-photo img { object-fit: cover; }
 
 @media (max-width: 1100px) {
   .rf-grid, .rf-cmp-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -722,6 +742,63 @@ button.secondary { border-radius: 10px !important; }
   .rf-nutri { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .rf-bar-track span { transition: none; } }
+
+/* ---- review round 1: visual fixes ---- */
+/* equal-height panels must not stretch their contents (the button grew to 85 px) */
+.rf-panel > .form, .rf-panel > .block, .rf-panel > button { flex-grow: 0 !important; }
+#rf-btn-photo, #rf-btn-search { height: 46px !important; min-height: 46px !important; flex: none !important; }
+/* the photo and the heat map fill their frames the same way, nothing cropped */
+#rf-photo img, #rf-cam img { width: 100% !important; height: 100% !important; object-fit: contain !important;
+  background: var(--rf-paper); }
+/* the request box must look like an input, not a caption */
+#rf-query textarea, #rf-query input { border: 1px solid var(--rf-line) !important; border-radius: 10px !important;
+  font-size: 16px !important; padding: 12px 14px !important; background: #fff !important; }
+#rf-query textarea:focus, #rf-query input:focus { border-color: var(--rf-saffron) !important;
+  box-shadow: 0 0 0 3px rgba(226,162,27,.18) !important; }
+/* best match: no frame inside the panel frame, photo no taller than the text beside it */
+.rf-feature { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); border: 0; padding: 0; background: transparent; }
+.rf-feature-media { aspect-ratio: 3 / 2; }
+/* section headings and steps readable in a compressed recording */
+#rf-recipes h4 { font-family: 'Young Serif', Georgia, serif !important; font-weight: 400 !important;
+  font-size: 19px !important; color: var(--rf-ink) !important; }
+.rf-steps, .rf-ingredients li { font-size: 15.5px; }
+/* the four cards keep their rows aligned: titles clamp to two lines */
+.rf-card h3 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 2.4em; }
+/* compare: labelled groups, a 1 px default outline that does not shift content, readable scores */
+.rf-cmp-group { font-family: 'Young Serif', Georgia, serif !important; font-weight: 400 !important;
+  font-size: 18px !important; color: var(--rf-ink) !important; margin: 4px 0 10px !important; }
+.rf-cmp-group span { font-family: 'Figtree', sans-serif; font-size: 13px; color: var(--rf-muted); margin-left: 6px; }
+.rf-cmp-card.is-default { border: 1px solid var(--rf-saffron); box-shadow: inset 0 0 0 1px var(--rf-saffron); }
+.rf-cmp-card li small { font-size: 12.5px; color: var(--rf-muted); }
+.rf-cmp-card ol { padding-left: 1.2em; }
+
+@media (max-width: 760px) {
+  .gradio-container { padding: 16px 12px 32px !important; }
+  .rf-panel { padding: 16px !important; }
+  .rf-step-sub { margin-left: 0; }
+  .rf-ingredients li { grid-template-columns: 84px 1fr; }
+  .rf-best { white-space: nowrap; }
+  .rf-score-track { width: 40px; }
+  .rf-feature { grid-template-columns: 1fr; }
+}
+/* ---- review round 2 ---- */
+.rf-more { margin: 32px 0 0 !important; padding-top: 24px; border-top: 1px solid var(--rf-line); }
+
+/* ---- review round 1: UX fixes ---- */
+button.primary:hover { background: #EDB53C !important; color: var(--rf-ink) !important; }
+.rf-best { color: #8A5C00; }
+.rf-card summary { padding: 12px 0; min-height: 44px; }
+#rf-btn-photo { background: transparent !important; border: 1px solid var(--rf-line) !important;
+  color: var(--rf-ink) !important; font-weight: 600 !important; height: 38px !important; min-height: 38px !important;
+  align-self: flex-start; width: auto !important; padding: 0 16px !important; }
+#rf-query label > span { font-size: 14px !important; color: var(--rf-muted) !important; font-weight: 600 !important; }
+@media (max-width: 760px) {
+  .rf-card-media.rf-noimg { aspect-ratio: auto; height: auto; padding: 10px 0; }
+  .rf-panel .row > div { min-width: 0 !important; flex: 1 1 0 !important; }   /* photo + heat map side by side */
+  .rf-noimg span { font-size: 18px; }
+  .rf-ingredients li { grid-template-columns: 92px 1fr; }
+}
 """
 
 THEME = gr.themes.Base(
@@ -745,35 +822,6 @@ THEME = gr.themes.Base(
 
 FORCE_LIGHT = "() => { document.body.classList.remove('dark'); }"
 
-EXAMPLE_DIR = Path(__file__).resolve().parent / "data" / "raw" / "food10" / "test"
-EXAMPLE_FILES = [
-    EXAMPLE_DIR / "pizza" / "validation_00500.jpg",
-    EXAMPLE_DIR / "falafel" / "validation_01766.jpg",
-    EXAMPLE_DIR / "sushi",
-    EXAMPLE_DIR / "pancakes",
-    EXAMPLE_DIR / "ramen",
-]
-
-
-def _examples() -> list[str]:
-    out = []
-    for p in EXAMPLE_FILES:
-        if p.is_dir():
-            files = sorted(p.glob("*.jpg"))
-            if files:
-                out.append(str(files[0]))
-        elif p.exists():
-            out.append(str(p))
-    return out
-
-
-QUERY_EXAMPLES = [
-    "vegetarian, under 30 minutes",
-    "vegan ramen under 30 minutes",
-    "an easy dessert",
-    "crispy chickpea fritters",
-]
-
 with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as demo:
     gr.HTML(
         '<header id="rf-head"><h1>Photo to recipe</h1>'
@@ -782,7 +830,7 @@ with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as
     )
     dish_state = gr.State("")
 
-    # two equal panels side by side, each in the same order: input, examples, model, button, result
+    # two equal panels side by side, each in the same order: input, model, button, result
     with gr.Row(equal_height=True):
         with gr.Column(scale=1, min_width=420, elem_classes="rf-panel"):
             gr.HTML('<div class="rf-step"><span class="n">1</span><h2>Photo</h2></div>'
@@ -790,13 +838,11 @@ with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as
             with gr.Row():
                 img_in = gr.Image(type="pil", label="Dish photo", height=220, elem_id="rf-photo",
                                   sources=["upload", "clipboard"])
-                cam_out = gr.Image(label="Where the model looked", height=220, interactive=False, elem_id="rf-cam")
-            ex = _examples()
-            photo_examples = (gr.Examples(ex, inputs=img_in, label="Example photos", elem_id="rf-examples")
-                              if ex else None)
+                cam_out = gr.Image(label="Heat map", height=220, interactive=False, elem_id="rf-cam")
             photo_model = gr.Radio(PHOTO_MODELS, value=PHOTO_MODELS[0], label="Image model",
                                    elem_classes="rf-models")
-            btn_photo = gr.Button("Recognise dish", variant="primary", elem_id="rf-btn-photo")
+            btn_photo = gr.Button("Run again", variant="secondary", size="sm", elem_id="rf-btn-photo",
+                                  visible=False)      # shown once there is a photo to run on
             pred_out = gr.HTML(PHOTO_EMPTY, elem_id="rf-pred")
 
         with gr.Column(scale=1, min_width=420, elem_classes="rf-panel"):
@@ -804,10 +850,9 @@ with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as
                     '<p class="rf-step-sub">Time and diet limits are read from your text. '
                     "If a photo was recognised, only that dish's recipes are searched.</p>")
             text_in = gr.Textbox(
-                show_label=False, lines=1, max_lines=1, elem_id="rf-query",
+                label="What would you like to cook?", lines=1, max_lines=1, elem_id="rf-query",
                 placeholder="e.g. vegetarian, under 30 minutes  (press Enter to search)",
             )
-            request_examples = gr.Examples(QUERY_EXAMPLES, inputs=text_in, label="Example requests")
             text_model = gr.Radio(TEXT_MODELS, value=TEXT_MODELS[0], label="Search model",
                                   elem_classes="rf-models")
             btn_text = gr.Button("Find recipes", variant="primary", elem_id="rf-btn-search")
@@ -832,7 +877,7 @@ with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as
 
     def recognise(event):
         """Recognise the dish, then refresh the recipes for it (or clear them) and move on to the request."""
-        (event(ui_predict, [img_in, photo_model], [cam_out, dish_state, pred_out])
+        (event(ui_predict, [img_in, photo_model], [cam_out, dish_state, pred_out, btn_photo])
          .then(ui_refresh_recipes, *search_io)
          .then(_noop, None, None, js=FOCUS_REQUEST)
          .then(ui_compare_photo, [img_in], cmp_photo_out)
@@ -844,19 +889,17 @@ with gr.Blocks(title="Photo to Recipe", theme=THEME, css=CSS, js=FORCE_LIGHT) as
          .then(_noop, None, None, js=SCROLL_TO_RECIPES)
          .then(ui_compare_search, [text_in, dish_state], cmp_search_out))
 
-    # a photo is recognised as soon as it arrives: upload, paste, example click or the button
+    # a photo is recognised as soon as it arrives: upload, paste or the button
     recognise(img_in.upload)
     recognise(btn_photo.click)
-    if photo_examples is not None:
-        recognise(photo_examples.load_input_event.then)
-    (img_in.clear(ui_clear, None, [cam_out, dish_state, pred_out])
+    recognise(photo_model.change)          # switching the image model re-runs the photo
+    (img_in.clear(ui_clear, None, [cam_out, dish_state, pred_out, btn_photo])
      .then(ui_reset_recipes, None, [summary_out, recipes_out])
      .then(lambda: (CMP_PHOTO_EMPTY, CMP_SEARCH_EMPTY), None, [cmp_photo_out, cmp_search_out]))
 
-    # a search runs from the button, the Enter key or an example request
+    # a search runs from the button or the Enter key
     find(btn_text.click)
     find(text_in.submit)
-    find(request_examples.load_input_event.then)
 
 if __name__ == "__main__":
     print("loading models…")

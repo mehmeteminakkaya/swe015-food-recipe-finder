@@ -16,7 +16,7 @@ Son iki satır (video ve HF) dışındaki her şey bu repoda tamamlanmış durum
 | **R7** Kod deposu: README, requirements, ağırlık yok | ✅ | https://github.com/mehmeteminakkaya/swe015-food-recipe-finder · kurulum: `pip install -r requirements.txt` → `python scripts/download_data.py --with-images` → `python app.py` · ağırlıklar release'te (en güncel: `v1.1-weights`), CI yeşil |
 | **R8** AI kullanım slaytı | ✅ | Slayt 12 · README "AI usage" |
 | Sunum 8–12 slayt, Intro/Development/Conclusion | ✅ | `docs/slides.pdf` (12 slayt), ilk slaytta isim/numara/repo/video alanı |
-| 2 dakikalık video (sesli, canlı demo) | ⚠️ **sessiz kayıt hazır, ses eklenecek** | `python scripts/record_demo.py` → `dist/video/demo_silent.mp4` (1:59); anlatım metni `docs/VIDEO_NARRATION.md`; ses ekleme: `python scripts/record_demo.py --voice-dir <klasör>` |
+| 2 dakikalık video (sesli, canlı demo) | ✅ | https://youtu.be/QuMgyBiunCc (1:53, kendi sesimle, liste dışı; oturum açmadan açıldığı doğrulandı) · ilk slaytta tıklanabilir link |
 | Ağırlıkların dış barındırılması (HF/Drive) | ⚠️ GitHub release ile karşılandı | HF'ye taşımak isterseniz: `huggingface-cli login` → `python scripts/upload_models.py --repo <kullanıcı>/swe015-food-recipe-finder` |
 
 ## Grading kapıları

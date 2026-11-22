@@ -17,3 +17,6 @@ dist/
 .dsh-office-*/
 gradio/
 .claude/
+*.mp4
+*.webm
+swe015-gradio/
